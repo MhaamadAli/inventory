@@ -12,7 +12,7 @@ import {
   deleteDoc,
   setDoc,
   doc,
-  getDoc
+  getDoc,
 } from "firebase/firestore";
 import { Box, Typography } from "@mui/material";
 
@@ -44,6 +44,25 @@ export default function Home() {
     }
   };
 
+  const addItem = async (item: string): Promise<void> => {
+    try {
+      const docRef = doc(firestore, "inventory", item);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const quantity = data?.quantity ?? 0;
+        await setDoc(docRef, { quantity: quantity + 1 }, { merge: true });
+      } else {
+        await setDoc(docRef, { quantity: 1 });
+      }
+
+      await updateInventory();
+    } catch (error) {
+      console.error("Error adding item:", error);
+    }
+  };
+
   const removeItem = async (item: string): Promise<void> => {
     const docRef = doc(firestore, "inventory", item);
     const docSnap = await getDoc(docRef);
@@ -65,6 +84,10 @@ export default function Home() {
   useEffect(() => {
     updateInventory();
   }, []);
+
+  const handlOpen = () => setOpen(true)
+  const handlCloae = () => setOpen(false);
+  
   return (
     <Box>
       <Typography variant="h1">Inventory Management</Typography>
