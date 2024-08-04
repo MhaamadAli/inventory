@@ -24,15 +24,17 @@ import {
   Toolbar,
   IconButton,
   Container,
+  Card,
+  CardContent,
+  CardActions,
 } from "@mui/material";
 import { User, onAuthStateChanged } from "firebase/auth";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import MenuIcon from "@mui/icons-material/Menu";
-
-interface InventoryItem {
-  name: string;
-  quantity?: number;
-}
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
+import SearchIcon from "@mui/icons-material/Search";
+import DescriptionIcon from "@mui/icons-material/Description";
 
 // Create a theme instance
 const theme = createTheme({
@@ -44,13 +46,31 @@ const theme = createTheme({
       main: "#dc004e",
     },
   },
+  typography: {
+    fontFamily: "Roboto, sans-serif",
+  },
 });
+
+interface InventoryItem {
+  name: string;
+  quantity?: number;
+  dateAdded?: string;
+  photoURL?: string;
+  description?: string;
+}
 
 export default function Home() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>(
+    []
+  );
   const [open, setOpen] = useState<boolean>(false);
   const [itemName, setItemName] = useState<string>("");
+  const [itemDescription, setItemDescription] = useState<string>("");
+  const [itemPhotoURL, setItemPhotoURL] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [user, setUser] = useState<User | null>(null);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -77,12 +97,17 @@ export default function Home() {
         });
       });
       setInventory(inventoryList);
+      setFilteredInventory(inventoryList);
     } catch (error) {
       console.error("Error fetching inventory:", error);
     }
   };
 
-  const addItem = async (item: string): Promise<void> => {
+  const addItem = async (
+    item: string,
+    description: string,
+    photoURL: string
+  ): Promise<void> => {
     if (!user) return;
 
     try {
@@ -94,10 +119,14 @@ export default function Home() {
         const quantity = data?.quantity ?? 0;
         await setDoc(docRef, { quantity: quantity + 1 }, { merge: true });
       } else {
-        await setDoc(docRef, { quantity: 1 });
+        const dateAdded = new Date().toISOString();
+        await setDoc(docRef, { quantity: 1, description, photoURL, dateAdded });
       }
 
       await updateInventory();
+      setItemDescription('');
+      setItemName('');
+      setItemPhotoURL('');
     } catch (error) {
       console.error("Error adding item:", error);
     }
@@ -126,7 +155,26 @@ export default function Home() {
   const handleOpen = () => setOpen(true);
   const handleClose = () => {
     setOpen(false);
-    setItemName(""); // Reset item name when closing the modal
+    setItemName("");
+    setItemDescription("");
+    setItemPhotoURL("");
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (query === "") {
+      setFilteredInventory(inventory);
+    } else {
+      const filtered = inventory.filter((item) =>
+        item.name.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredInventory(filtered);
+    }
+  };
+
+  const handleViewItem = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setOpen(true);
   };
 
   return (
@@ -153,14 +201,26 @@ export default function Home() {
       <Container maxWidth="lg">
         {user && (
           <>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleOpen}
-              style={{ margin: "20px 0" }}
-            >
-              Add New Item
-            </Button>
+            <Stack direction="row" spacing={2} marginTop={2}>
+              <TextField
+                variant="outlined"
+                placeholder="Search items..."
+                fullWidth
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: <SearchIcon />,
+                }}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleOpen}
+              >
+                Add New Item
+              </Button>
+            </Stack>
             <Modal
               open={open}
               onClose={handleClose}
@@ -177,31 +237,76 @@ export default function Home() {
                   marginTop: "20vh",
                 }}
               >
-                <Typography id="modal-modal-title" variant="h6" component="h2">
-                  Add Item
-                </Typography>
-                <Stack width="100%" direction="row" spacing={2}>
-                  <TextField
-                    id="outlined-basic"
-                    label="Item"
-                    variant="outlined"
-                    fullWidth
-                    value={itemName}
-                    onChange={(e) => setItemName(e.target.value)}
-                  />
-                  <Button
-                    variant="contained"
-                    onClick={() => {
-                      addItem(itemName);
-                      handleClose();
-                    }}
-                  >
-                    Add
-                  </Button>
-                </Stack>
+                {selectedItem ? (
+                  <>
+                    <Typography
+                      id="modal-modal-title"
+                      variant="h6"
+                      component="h2"
+                    >
+                      {selectedItem.name}
+                    </Typography>
+                    <Typography>
+                      Date Added: {selectedItem.dateAdded}
+                    </Typography>
+                    {selectedItem.photoURL && (
+                      <img
+                        src={selectedItem.photoURL}
+                        alt={selectedItem.name}
+                        style={{ maxWidth: "100%" }}
+                      />
+                    )}
+                    <Typography>{selectedItem.description}</Typography>
+                  </>
+                ) : (
+                  <>
+                    <Typography
+                      id="modal-modal-title"
+                      variant="h6"
+                      component="h2"
+                    >
+                      Add Item
+                    </Typography>
+                    <Stack width="100%" direction="column" spacing={2}>
+                      <TextField
+                        id="outlined-basic"
+                        label="Item"
+                        variant="outlined"
+                        fullWidth
+                        value={itemName}
+                        onChange={(e) => setItemName(e.target.value)}
+                      />
+                      <TextField
+                        id="outlined-basic"
+                        label="Description"
+                        variant="outlined"
+                        fullWidth
+                        value={itemDescription}
+                        onChange={(e) => setItemDescription(e.target.value)}
+                      />
+                      <TextField
+                        id="outlined-basic"
+                        label="Photo URL"
+                        variant="outlined"
+                        fullWidth
+                        value={itemPhotoURL}
+                        onChange={(e) => setItemPhotoURL(e.target.value)}
+                      />
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          addItem(itemName, itemDescription, itemPhotoURL);
+                          handleClose();
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </Stack>
+                  </>
+                )}
               </Box>
             </Modal>
-            <Box border="1px solid #333" overflow="auto" marginTop={2}>
+            <Box marginTop={2}>
               <Box
                 width="100%"
                 height="100px"
@@ -209,38 +314,60 @@ export default function Home() {
                 display="flex"
                 justifyContent="center"
                 alignItems="center"
+                borderRadius={1}
+                boxShadow={3}
               >
                 <Typography variant="h4" color="#333" textAlign="center">
                   Inventory Items
                 </Typography>
               </Box>
               <Stack width="100%" spacing={2} padding={2}>
-                {inventory.map(({ name, quantity }) => (
-                  <Box
-                    key={name}
-                    width="100%"
-                    minHeight="100px"
-                    display="flex"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    bgcolor="#f0f0f0"
-                    paddingX={5}
-                  >
-                    <Typography variant="h6" color="#333" textAlign="center">
-                      {name.charAt(0).toUpperCase() + name.slice(1)}
-                    </Typography>
-                    <Typography variant="h6" color="#333" textAlign="center">
-                      Quantity: {quantity}
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      color="secondary"
-                      onClick={() => removeItem(name)}
+                {filteredInventory.map(
+                  ({ name, quantity, dateAdded, photoURL, description }) => (
+                    <Card
+                      key={name}
+                      variant="outlined"
+                      sx={{ minWidth: 275, boxShadow: 3, borderRadius: 2 }}
                     >
-                      Remove
-                    </Button>
-                  </Box>
-                ))}
+                      <CardContent>
+                        <Typography variant="h6" component="div">
+                          {name}
+                        </Typography>
+                        <Typography color="textSecondary">
+                          Quantity: {quantity ?? 0}
+                        </Typography>
+                      </CardContent>
+                      <CardActions>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          startIcon={<RemoveIcon />}
+                          onClick={() => removeItem(name)}
+                        >
+                          Remove
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="secondary"
+                          startIcon={<DescriptionIcon />}
+                          onClick={() =>
+                            handleViewItem({
+                              name,
+                              quantity,
+                              dateAdded,
+                              photoURL,
+                              description,
+                            })
+                          }
+                        >
+                          View
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  )
+                )}
               </Stack>
             </Box>
           </>
